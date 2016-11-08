@@ -92,7 +92,7 @@ class ImportScripts::Smf2 < ImportScripts::Base
     total = query("SELECT COUNT(*) FROM {prefix}members", as: :single)
 
     create_users(query(<<-SQL), total: total) do |member|
-      SELECT a.id_member, a.member_name, a.date_registered, a.real_name, a.email_address,
+      SELECT a.id_member, a.member_name, a.date_registered, a.real_name, a.email_address, a.passwd,
              a.is_activated, a.last_login, a.birthdate, a.member_ip, a.id_group, a.additional_groups,
              b.id_attach, b.file_hash, b.filename
       FROM {prefix}members AS a
@@ -118,6 +118,8 @@ class ImportScripts::Smf2 < ImportScripts::Base
 
         post_create_action: proc do |user|
           user.update(created_at: create_time) if create_time < user.created_at
+          user.custom_fields['import_pass'] = "#{member[:member_name]}:#{member[:passwd]}"
+          user.save
           GroupUser.transaction do
             group_ids.each do |gid|
               group_id = group_id_from_imported_group_id(gid) and
