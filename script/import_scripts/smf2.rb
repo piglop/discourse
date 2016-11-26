@@ -155,14 +155,18 @@ class ImportScripts::Smf2 < ImportScripts::Base
         name: board[:name],
         description: board[:description],
         parent_category_id: parent_id,
-        post_create_action: restricted && proc do |category|
-          category.update(read_restricted: true)
-          groups.each do |imported_group_id|
-            group_id = group_id_from_imported_group_id(imported_group_id) and
-            CategoryGroup.find_or_create_by(category: category, group_id: group_id) do |cg|
-              cg.permission_type = CategoryGroup.permission_types[:full]
+        post_create_action: proc do |category|
+          if restricted
+            category.update(read_restricted: true)
+            groups.each do |imported_group_id|
+              group_id = group_id_from_imported_group_id(imported_group_id) and
+              CategoryGroup.find_or_create_by(category: category, group_id: group_id) do |cg|
+                cg.permission_type = CategoryGroup.permission_types[:full]
+              end
             end
           end
+          Permalink.create(url: "/index.php?board=#{board[:id_board]}", category_id: category.id)
+          Permalink.create(url: "/index.php?board=#{board[:id_board]}.0", category_id: category.id)
         end,
       }
     end
@@ -253,9 +257,13 @@ class ImportScripts::Smf2 < ImportScripts::Base
         id: message[:id_msg],
         user_id: user_id_from_imported_user_id(message[:id_member]) || -1,
         created_at: Time.zone.at(message[:poster_time]),
-        post_create_action: ignore_quotes && proc do |post|
-          post.custom_fields['import_rebake'] = 't'
-          post.save
+        post_create_action: proc do |created_post|
+          if ignore_quotes
+            created_post.custom_fields['import_rebake'] = 't'
+            created_post.save
+          end
+          Permalink.create(url: "/index.php?topic=#{message[:id_topic]}.0", topic_id: created_post.topic_id) if post[:title]
+          Permalink.create(url: "/index.php?topic=#{message[:id_topic]}.msg#{message[:id_msg]}", post_id: created_post.id)
         end
       }
       if message[:id_msg] == message[:id_first_msg]
